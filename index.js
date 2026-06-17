@@ -34,6 +34,7 @@ async function run() {
     const db = client.db("tech-bazaar");
     const userCollection = db.collection('user');
     const subscriptionCollection = db.collection('subscriptions')
+    const productCollection = db.collection('products')
 
 
     app.get('/users', async (req, res) => {
@@ -61,6 +62,14 @@ async function run() {
       )
 
       res.json({ msg: "Payment successful !!" })
+    })
+
+
+    // Products
+    app.post('/seller/product', async ( req , res ) => {
+      const data = req.body
+      const result = await productCollection.insertOne(data);
+      res.send(result)
     })
 
     // await client.db("admin").command({ ping: 1 });
