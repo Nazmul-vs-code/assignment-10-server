@@ -5,6 +5,7 @@ const express = require("express");
 const dontenv = require("dotenv");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 dontenv.config();
 
 const uri = process.env.MONGODB_URI;
@@ -27,6 +28,44 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
+const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`))
+
+// middle wires
+
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || ! authHeader.startsWith('Bearer')) {
+    return res.status(401).json({message: 'Unauthorized access'})
+  }
+  
+  const token = authHeader.split(" ")[1]
+  
+  if (!token) {
+    return res.status(401).json({message: 'Unauthorized access'})
+    
+  }
+
+  try {
+    const {payload} = await jwtVerify(token, JWKS)
+    // console.log(" verify middle weire got ", payload)
+    req.user = payload;
+    next()
+  } catch (error) {
+    return res.status(401).json({message: 'Unauthorized access'})
+    
+  }
+}
+
+const sellerVerify = async (req , res , next ) => {
+  const user = req?.user
+
+  if (user?.role == 'seller') {
+    console.log(user?.role , ' user in sellerverify')
+    next()
+  }
+}
 
 async function run() {
   try {
@@ -66,7 +105,7 @@ async function run() {
 
 
     // Products
-    app.post('/seller/product', async ( req , res ) => {
+    app.post('/seller/product', verifyToken, sellerVerify , async ( req , res ) => {
       const data = req.body
       const result = await productCollection.insertOne(data);
       res.send(result)
