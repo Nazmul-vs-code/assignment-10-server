@@ -62,7 +62,7 @@ const sellerVerify = async (req, res, next) => {
   const user = req?.user
 
   if (user?.role == 'seller') {
-    console.log(user?.role, ' user in sellerverify')
+    console.log(user?.role, ' user in selleVverify')
     next()
   }
 }
@@ -71,7 +71,16 @@ const buyerVerify = async (req, res, next) => {
   const user = req?.user
 
   if (user?.role == 'buyer') {
-    console.log(user?.role, ' user in sellerverify')
+    console.log(user?.role, ' user in buyerVerify')
+    next()
+  }
+}
+
+const adminVerify = async (req, res, next) => {
+  const user = req?.user
+
+  if (user?.role == 'admin') {
+    console.log(user?.role, ' user in AdminVerify')
     next()
   }
 }
@@ -87,10 +96,32 @@ async function run() {
     const paymentsCollection = db.collection('payments')
 
 
-    app.get('/users', async (req, res) => {
+    app.get('/admin/users', verifyToken, adminVerify, async (req, res) => {
       const users = await userCollection.find({}).toArray();
       res.send(users)
     })
+
+    // PATCH: Update user status (e.g., 'active', 'blocked')
+    app.patch('/admin/users/:id', verifyToken, adminVerify, async (req, res) => {
+      try {
+        const userId = req.params.id;
+        const { status } = req.body; // Expecting { status: 'blocked' } or { status: 'active' }
+
+        const result = await userCollection.updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { status: status } }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json({ message: "User status updated successfully", updated: true });
+      } catch (error) {
+        console.error("Error updating user status:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
 
     app.post('/subscription', async (req, res) => {
       const { sessionId, userId, priceId } = req.body
