@@ -118,7 +118,7 @@ async function run() {
 
     // Add this inside your run() function in server.js
     app.post('/payment', verifyToken, async (req, res) => {
-      const { sessionId, productId, userId, priceId, Author } = req.body;
+      const { sessionId, productId, userId, priceId, Author, userEmail } = req.body;
 
       try {
         // 1. Check if record exists
@@ -133,6 +133,8 @@ async function run() {
           _id: new ObjectId(productId)
         });
 
+
+
         // 3. Prepare payment data with enriched product info
         const paymentData = {
           sessionId,
@@ -145,6 +147,7 @@ async function run() {
           productCategory: product?.category || "Product", // Capture category for analytics
           status: 'completed',
           Author,
+          userEmail,
           createdAt: new Date()
         };
 
@@ -161,6 +164,9 @@ async function run() {
       }
     });
 
+
+
+
     // Fetch payment history for the logged-in user
     app.get('/payments', verifyToken, async (req, res) => {
       try {
@@ -170,6 +176,24 @@ async function run() {
       } catch (error) {
         console.error("Error fetching payments:", error);
         res.status(500).json({ message: 'Internal server error' });
+      }
+    });
+
+
+    // Get orders received by the seller (based on Author field)
+    app.get('/my-orders', verifyToken, async (req, res) => {
+      try {
+        const sellerId = req.user.id; // Logged-in seller's ID
+
+        // Find all payments where 'Author' matches the seller's ID
+        const sellerOrders = await paymentsCollection.find({
+          Author: sellerId
+        }).toArray();
+
+        res.send(sellerOrders);
+      } catch (error) {
+        console.error("Error fetching seller orders:", error);
+        res.status(500).json({ message: "Failed to fetch seller orders" });
       }
     });
 
