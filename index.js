@@ -67,6 +67,15 @@ const sellerVerify = async (req, res, next) => {
   }
 }
 
+const buyerVerify = async (req, res, next) => {
+  const user = req?.user
+
+  if (user?.role == 'buyer') {
+    console.log(user?.role, ' user in sellerverify')
+    next()
+  }
+}
+
 async function run() {
   try {
     await client.connect();
@@ -109,47 +118,47 @@ async function run() {
 
     // Add this inside your run() function in server.js
     app.post('/payment', verifyToken, async (req, res) => {
-  const { sessionId, productId, userId, priceId } = req.body;
+      const { sessionId, productId, userId, priceId } = req.body;
 
-  try {
-    // 1. Check if record exists
-    const isExist = await paymentsCollection.findOne({ sessionId });
-    if (isExist) {
-      return res.json({ msg: "Payment record already exists" });
-    }
+      try {
+        // 1. Check if record exists
+        const isExist = await paymentsCollection.findOne({ sessionId });
+        if (isExist) {
+          return res.json({ msg: "Payment record already exists" });
+        }
 
-    // 2. Fetch product details from productCollection
-    // Using ObjectId assuming product IDs are stored as ObjectId in MongoDB
-    const product = await productCollection.findOne({ 
-      _id: new ObjectId(productId) 
+        // 2. Fetch product details from productCollection
+        // Using ObjectId assuming product IDs are stored as ObjectId in MongoDB
+        const product = await productCollection.findOne({
+          _id: new ObjectId(productId)
+        });
+
+        // 3. Prepare payment data with enriched product info
+        const paymentData = {
+          sessionId,
+          productId,
+          userId,
+          priceId,
+          // Default to "Unknown Product" if product details are missing
+          productTitle: product?.title || "Unknown Product",
+          productImage: product?.images || "",
+          productCategory: product?.category || "Product", // Capture category for analytics
+          status: 'completed',
+          createdAt: new Date()
+        };
+
+        // 4. Insert into payments
+        const result = await paymentsCollection.insertOne(paymentData);
+
+        res.json({
+          msg: "Payment saved successfully!",
+          insertedId: result.insertedId
+        });
+      } catch (error) {
+        console.error("Error saving payment:", error);
+        res.status(500).json({ error: "Failed to save payment record" });
+      }
     });
-
-    // 3. Prepare payment data with enriched product info
-    const paymentData = {
-      sessionId,
-      productId,
-      userId,
-      priceId,
-      // Default to "Unknown Product" if product details are missing
-      productTitle: product?.title || "Unknown Product",
-      productImage: product?.images || "", 
-      productCategory: product?.category || "Product", // Capture category for analytics
-      status: 'completed',
-      createdAt: new Date()
-    };
-
-    // 4. Insert into payments
-    const result = await paymentsCollection.insertOne(paymentData);
-
-    res.json({ 
-      msg: "Payment saved successfully!", 
-      insertedId: result.insertedId 
-    });
-  } catch (error) {
-    console.error("Error saving payment:", error);
-    res.status(500).json({ error: "Failed to save payment record" });
-  }
-});
 
     // Fetch payment history for the logged-in user
     app.get('/payments', verifyToken, async (req, res) => {
@@ -186,6 +195,23 @@ async function run() {
       res.send(result);
     });
 
+    // Fetch products created by the logged-in seller
+    app.get('/my-products', verifyToken, async (req, res) => {
+      try {
+        const userId = req.user.id; // From verifyToken
+
+        // Use dot notation to query nested fields
+        const myProducts = await productCollection.find({
+          "sellerInfo.userId": userId
+        }).toArray();
+
+        res.send(myProducts);
+      } catch (error) {
+        console.error("Error fetching user products:", error);
+        res.status(500).json({ message: "Failed to fetch products" });
+      }
+    });
+
     // wishlists with toggle functinalities
 
     // Add or Toggle Product to Wishlist
@@ -215,25 +241,25 @@ async function run() {
     });
 
     // DELETE wishlist item
-app.delete('/wishlist/:productId', verifyToken, async (req, res) => {
-  try {
-    const { productId } = req.params;
-    const userId = req.user.id; // From verifyToken middleware
+    app.delete('/wishlist/:productId', verifyToken, async (req, res) => {
+      try {
+        const { productId } = req.params;
+        const userId = req.user.id; // From verifyToken middleware
 
-    const query = { userId, productId };
-    
-    const result = await wishlistCollection.deleteOne(query);
+        const query = { userId, productId };
 
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ message: "Wishlist item not found" });
-    }
+        const result = await wishlistCollection.deleteOne(query);
 
-    res.json({ message: "Wishlist item deleted successfully", deleted: true });
-  } catch (error) {
-    console.error("Error deleting wishlist:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Wishlist item not found" });
+        }
+
+        res.json({ message: "Wishlist item deleted successfully", deleted: true });
+      } catch (error) {
+        console.error("Error deleting wishlist:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
 
     // Fetch Wishlist for specific user
     app.get('/wishlist', verifyToken, async (req, res) => {
