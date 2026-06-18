@@ -36,33 +36,33 @@ const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || ! authHeader.startsWith('Bearer')) {
-    return res.status(401).json({message: 'Unauthorized access'})
+  if (!authHeader || !authHeader.startsWith('Bearer')) {
+    return res.status(401).json({ message: 'Unauthorized access' })
   }
-  
+
   const token = authHeader.split(" ")[1]
-  
+
   if (!token) {
-    return res.status(401).json({message: 'Unauthorized access'})
-    
+    return res.status(401).json({ message: 'Unauthorized access' })
+
   }
 
   try {
-    const {payload} = await jwtVerify(token, JWKS)
+    const { payload } = await jwtVerify(token, JWKS)
     // console.log(" verify middle weire got ", payload)
     req.user = payload;
     next()
   } catch (error) {
-    return res.status(401).json({message: 'Unauthorized access'})
-    
+    return res.status(401).json({ message: 'Unauthorized access' })
+
   }
 }
 
-const sellerVerify = async (req , res , next ) => {
+const sellerVerify = async (req, res, next) => {
   const user = req?.user
 
   if (user?.role == 'seller') {
-    console.log(user?.role , ' user in sellerverify')
+    console.log(user?.role, ' user in sellerverify')
     next()
   }
 }
@@ -74,6 +74,7 @@ async function run() {
     const userCollection = db.collection('user');
     const subscriptionCollection = db.collection('subscriptions')
     const productCollection = db.collection('products')
+    const wishlistCollection = db.collection('wishlist')
 
 
     app.get('/users', async (req, res) => {
@@ -84,10 +85,10 @@ async function run() {
     app.post('/subscription', async (req, res) => {
       const { sessionId, userId, priceId } = req.body
       const items = { sessionId, userId, priceId }
-      
-      const isExist = await subscriptionCollection.findOne({sessionId})
+
+      const isExist = await subscriptionCollection.findOne({ sessionId })
       if (isExist) {
-        return res.json({msg: "Already exist!! "})
+        return res.json({ msg: "Already exist!! " })
       }
 
       const result = await subscriptionCollection.insertOne(items)
@@ -105,11 +106,62 @@ async function run() {
 
 
     // Products
-    app.post('/seller/product', verifyToken, sellerVerify , async ( req , res ) => {
+    app.post('/seller/product', verifyToken, sellerVerify, async (req, res) => {
       const data = req.body
       const result = await productCollection.insertOne(data);
       res.send(result)
     })
+
+
+    // All public products here
+    app.get('/products', async (req, res) => {
+      const result = await productCollection.find().toArray()
+      res.send(result)
+    })
+
+
+    // Get single product by ID
+    app.get('/products/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await productCollection.findOne(query);
+      res.send(result);
+    });
+
+    // wishlists with toggle functinalities
+
+    // Add or Toggle Product to Wishlist
+    app.post('/wishlist', verifyToken, async (req, res) => {
+      const { productId, productTitle, productImage, productPrice } = req.body;
+      const userId = req.user.id; // From verifyToken middleware
+
+      const query = { userId, productId };
+
+      // Check if it already exists to allow "toggling" (remove if exists)
+      const isExist = await wishlistCollection.findOne(query);
+
+      if (isExist) {
+        const result = await wishlistCollection.deleteOne(query);
+        return res.json({ removed: true });
+      }
+
+      const result = await wishlistCollection.insertOne({
+        ...query,
+        productTitle,
+        productImage,
+        productPrice,
+        createdAt: new Date()
+      });
+
+      res.json({ inserted: true });
+    });
+
+    // Fetch Wishlist for specific user
+    app.get('/wishlist', verifyToken, async (req, res) => {
+      const userId = req.user.id;
+      const result = await wishlistCollection.find({ userId }).toArray();
+      res.send(result);
+    });
 
     // await client.db("admin").command({ ping: 1 });
     // console.log(
