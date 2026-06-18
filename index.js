@@ -118,7 +118,7 @@ async function run() {
 
     // Add this inside your run() function in server.js
     app.post('/payment', verifyToken, async (req, res) => {
-      const { sessionId, productId, userId, priceId } = req.body;
+      const { sessionId, productId, userId, priceId, Author } = req.body;
 
       try {
         // 1. Check if record exists
@@ -144,6 +144,7 @@ async function run() {
           productImage: product?.images || "",
           productCategory: product?.category || "Product", // Capture category for analytics
           status: 'completed',
+          Author,
           createdAt: new Date()
         };
 
