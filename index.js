@@ -202,7 +202,55 @@ async function run() {
       const data = req.body
       const result = await productCollection.insertOne(data);
       res.send(result)
-    })
+    });
+
+
+    // DELETE a product
+    app.delete('/seller/product/:id', verifyToken, sellerVerify, async (req, res) => {
+      try {
+        const productId = req.params.id;
+        const sellerId = req.user.id;
+
+        // Ensure the product belongs to this seller before deleting
+        const result = await productCollection.deleteOne({
+          _id: new ObjectId(productId),
+          "sellerInfo.userId": sellerId
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Product not found or unauthorized" });
+        }
+
+        res.json({ message: "Product deleted successfully", deleted: true });
+      } catch (error) {
+        console.error("Error deleting product:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // PATCH (Edit) a product
+    app.patch('/seller/product/:id', verifyToken, sellerVerify, async (req, res) => {
+      try {
+        const productId = req.params.id;
+        const sellerId = req.user.id;
+        const updateData = req.body;
+
+        // Update only the fields provided in req.body
+        const result = await productCollection.updateOne(
+          { _id: new ObjectId(productId), "sellerInfo.userId": sellerId },
+          { $set: updateData }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "Product not found or unauthorized" });
+        }
+
+        res.json({ message: "Product updated successfully", updated: true });
+      } catch (error) {
+        console.error("Error updating product:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
 
 
     // All public products here
