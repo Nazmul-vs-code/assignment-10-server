@@ -109,33 +109,47 @@ async function run() {
 
     // Add this inside your run() function in server.js
     app.post('/payment', verifyToken, async (req, res) => {
-      const { sessionId, productId, userId, priceId } = req.body;
+  const { sessionId, productId, userId, priceId } = req.body;
 
-      try {
-        // 1. Check if this payment record already exists to prevent duplicates
-        const isExist = await paymentsCollection.findOne({ sessionId });
-        if (isExist) {
-          return res.json({ msg: "Payment record already exists" });
-        }
+  try {
+    // 1. Check if record exists
+    const isExist = await paymentsCollection.findOne({ sessionId });
+    if (isExist) {
+      return res.json({ msg: "Payment record already exists" });
+    }
 
-        // 2. Insert payment details into your collection
-        const paymentData = {
-          sessionId,
-          productId,
-          userId,
-          priceId,
-          status: 'completed',
-          createdAt: new Date()
-        };
-
-        const result = await paymentsCollection.insertOne(paymentData);
-
-        res.json({ msg: "Payment saved successfully!", insertedId: result.insertedId });
-      } catch (error) {
-        console.error("Error saving payment:", error);
-        res.status(500).json({ error: "Failed to save payment record" });
-      }
+    // 2. Fetch product details from productCollection
+    // Using ObjectId assuming product IDs are stored as ObjectId in MongoDB
+    const product = await productCollection.findOne({ 
+      _id: new ObjectId(productId) 
     });
+
+    // 3. Prepare payment data with enriched product info
+    const paymentData = {
+      sessionId,
+      productId,
+      userId,
+      priceId,
+      // Default to "Unknown Product" if product details are missing
+      productTitle: product?.title || "Unknown Product",
+      productImage: product?.images || "", 
+      productCategory: product?.category || "Product", // Capture category for analytics
+      status: 'completed',
+      createdAt: new Date()
+    };
+
+    // 4. Insert into payments
+    const result = await paymentsCollection.insertOne(paymentData);
+
+    res.json({ 
+      msg: "Payment saved successfully!", 
+      insertedId: result.insertedId 
+    });
+  } catch (error) {
+    console.error("Error saving payment:", error);
+    res.status(500).json({ error: "Failed to save payment record" });
+  }
+});
 
     // Fetch payment history for the logged-in user
     app.get('/payments', verifyToken, async (req, res) => {
