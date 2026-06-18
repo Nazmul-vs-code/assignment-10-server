@@ -75,6 +75,7 @@ async function run() {
     const subscriptionCollection = db.collection('subscriptions')
     const productCollection = db.collection('products')
     const wishlistCollection = db.collection('wishlist')
+    const paymentsCollection = db.collection('payments')
 
 
     app.get('/users', async (req, res) => {
@@ -104,6 +105,49 @@ async function run() {
       res.json({ msg: "Payment successful !!" })
     })
 
+
+
+    // Add this inside your run() function in server.js
+    app.post('/payment', verifyToken, async (req, res) => {
+      const { sessionId, productId, userId, priceId } = req.body;
+
+      try {
+        // 1. Check if this payment record already exists to prevent duplicates
+        const isExist = await paymentsCollection.findOne({ sessionId });
+        if (isExist) {
+          return res.json({ msg: "Payment record already exists" });
+        }
+
+        // 2. Insert payment details into your collection
+        const paymentData = {
+          sessionId,
+          productId,
+          userId,
+          priceId,
+          status: 'completed',
+          createdAt: new Date()
+        };
+
+        const result = await paymentsCollection.insertOne(paymentData);
+
+        res.json({ msg: "Payment saved successfully!", insertedId: result.insertedId });
+      } catch (error) {
+        console.error("Error saving payment:", error);
+        res.status(500).json({ error: "Failed to save payment record" });
+      }
+    });
+
+    // Fetch payment history for the logged-in user
+    app.get('/payments', verifyToken, async (req, res) => {
+      try {
+        const userId = req.user.id;
+        const result = await paymentsCollection.find({ userId }).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching payments:", error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    });
 
     // Products
     app.post('/seller/product', verifyToken, sellerVerify, async (req, res) => {
@@ -155,6 +199,27 @@ async function run() {
 
       res.json({ inserted: true });
     });
+
+    // DELETE wishlist item
+app.delete('/wishlist/:productId', verifyToken, async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const userId = req.user.id; // From verifyToken middleware
+
+    const query = { userId, productId };
+    
+    const result = await wishlistCollection.deleteOne(query);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "Wishlist item not found" });
+    }
+
+    res.json({ message: "Wishlist item deleted successfully", deleted: true });
+  } catch (error) {
+    console.error("Error deleting wishlist:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
     // Fetch Wishlist for specific user
     app.get('/wishlist', verifyToken, async (req, res) => {
