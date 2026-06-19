@@ -261,7 +261,7 @@ async function run() {
 
     // GET: Admin access to all orders/payments
     app.get('/admin/orders', verifyToken, adminVerify, async (req, res) => {
-      try {
+      try { 
         // Fetch all orders/payments from the collection
         const orders = await paymentsCollection.find({}).toArray();
 
