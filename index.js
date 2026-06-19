@@ -259,6 +259,19 @@ async function run() {
       }
     });
 
+    // GET: Admin access to all orders/payments
+    app.get('/admin/orders', verifyToken, adminVerify, async (req, res) => {
+      try {
+        // Fetch all orders/payments from the collection
+        const orders = await paymentsCollection.find({}).toArray();
+
+        res.send(orders);
+      } catch (error) {
+        console.error("Error fetching all orders for admin:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
     // Products
 
 
