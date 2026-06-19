@@ -14,10 +14,7 @@ const app = express();
 const PORT = process.env.PORT;
 
 app.use(
-  cors({
-    credentials: true,
-    origin: [process.env.CLIENT_URL],
-  }),
+  cors(),
 );
 app.use(express.json());
 
@@ -96,9 +93,15 @@ const adminVerify = async (req, res, next) => {
   }
 }
 
-async function run() {
-  try {
-    await client.connect();
+// async function run() {
+//   try {
+//     await client.connect();
+
+    client.connect(()=> {
+
+      console.log('connecting to mongo db')
+    }).catch(console.dir)
+
     const db = client.db("tech-bazaar");
     const userCollection = db.collection('user');
     const subscriptionCollection = db.collection('subscriptions')
@@ -527,12 +530,12 @@ async function run() {
     // await client.db("admin").command({ ping: 1 });
     // console.log(
     //   "Pinged your deployment. You successfully connected to MongoDB!",
-    // );
-  } finally {
+//     // );
+//   } finally {
 
-  }
-}
-run().catch(console.dir);
+//   }
+// }
+// run().catch(console.dir);
 
 app.get("/", (req, res) => {
   res.send("Server is running fine!");
@@ -542,3 +545,5 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+module.exports = app;
