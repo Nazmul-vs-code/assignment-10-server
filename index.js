@@ -76,6 +76,17 @@ const buyerVerify = async (req, res, next) => {
   }
 }
 
+const sellerOrAdminVerify = async (req, res, next) => {
+  const user = req?.user;
+
+  // Allow if user is a seller OR an admin
+  if (user?.role === 'seller' || user?.role === 'admin') {
+    next();
+  } else {
+    return res.status(403).json({ message: "Forbidden: Access denied" });
+  }
+};
+
 const adminVerify = async (req, res, next) => {
   const user = req?.user
 
@@ -119,6 +130,26 @@ async function run() {
         res.json({ message: "User status updated successfully", updated: true });
       } catch (error) {
         console.error("Error updating user status:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // DELETE: Remove a user from the database
+    app.delete('/admin/users/:id', verifyToken, adminVerify, async (req, res) => {
+      try {
+        const userId = req.params.id;
+
+        const result = await userCollection.deleteOne({
+          _id: new ObjectId(userId)
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json({ message: "User deleted successfully", deleted: true });
+      } catch (error) {
+        console.error("Error deleting user:", error);
         res.status(500).json({ message: "Internal server error" });
       }
     });
@@ -229,6 +260,22 @@ async function run() {
     });
 
     // Products
+
+
+    // GET: Admin access to all products
+    app.get('/admin/products', verifyToken, adminVerify, async (req, res) => {
+      try {
+        const products = await productCollection.find({}).toArray();
+        res.send(products);
+      } catch (error) {
+        console.error("Error fetching all products for admin:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+
+
+
     app.post('/seller/product', verifyToken, sellerVerify, async (req, res) => {
       const data = req.body
       const result = await productCollection.insertOne(data);
@@ -237,16 +284,43 @@ async function run() {
 
 
     // DELETE a product
-    app.delete('/seller/product/:id', verifyToken, sellerVerify, async (req, res) => {
+    // app.delete('/seller/product/:id', verifyToken, sellerOrAdminVerify, async (req, res) => {
+    //   try {
+    //     const productId = req.params.id;
+    //     const sellerId = req.user.id;
+
+    //     // Ensure the product belongs to this seller before deleting
+    //     const result = await productCollection.deleteOne({
+    //       _id: new ObjectId(productId),
+    //       "sellerInfo.userId": sellerId
+    //     });
+
+    //     if (result.deletedCount === 0) {
+    //       return res.status(404).json({ message: "Product not found or unauthorized" });
+    //     }
+
+    //     res.json({ message: "Product deleted successfully", deleted: true });
+    //   } catch (error) {
+    //     console.error("Error deleting product:", error);
+    //     res.status(500).json({ message: "Internal server error" });
+    //   }
+    // });
+
+    app.delete('/seller/product/:id', verifyToken, sellerOrAdminVerify, async (req, res) => {
       try {
         const productId = req.params.id;
-        const sellerId = req.user.id;
+        const userId = req.user.id;
+        const role = req.user.role;
 
-        // Ensure the product belongs to this seller before deleting
-        const result = await productCollection.deleteOne({
-          _id: new ObjectId(productId),
-          "sellerInfo.userId": sellerId
-        });
+        // Create filter based on role
+        const filter = { _id: new ObjectId(productId) };
+
+        // Only restrict to owner if the user is NOT an admin
+        if (role !== 'admin') {
+          filter["sellerInfo.userId"] = userId;
+        }
+
+        const result = await productCollection.deleteOne(filter);
 
         if (result.deletedCount === 0) {
           return res.status(404).json({ message: "Product not found or unauthorized" });
@@ -260,15 +334,45 @@ async function run() {
     });
 
     // PATCH (Edit) a product
-    app.patch('/seller/product/:id', verifyToken, sellerVerify, async (req, res) => {
+    // app.patch('/seller/product/:id', verifyToken, sellerOrAdminVerify, async (req, res) => {
+    //   try {
+    //     const productId = req.params.id;
+    //     const sellerId = req.user.id;
+    //     const updateData = req.body;
+
+    //     // Update only the fields provided in req.body
+    //     const result = await productCollection.updateOne(
+    //       { _id: new ObjectId(productId), "sellerInfo.userId": sellerId },
+    //       { $set: updateData }
+    //     );
+
+    //     if (result.matchedCount === 0) {
+    //       return res.status(404).json({ message: "Product not found or unauthorized" });
+    //     }
+
+    //     res.json({ message: "Product updated successfully", updated: true });
+    //   } catch (error) {
+    //     console.error("Error updating product:", error);
+    //     res.status(500).json({ message: "Internal server error" });
+    //   }
+    // });
+
+    app.patch('/seller/product/:id', verifyToken, sellerOrAdminVerify, async (req, res) => {
       try {
         const productId = req.params.id;
-        const sellerId = req.user.id;
+        const userId = req.user.id;
+        const role = req.user.role;
         const updateData = req.body;
 
-        // Update only the fields provided in req.body
+        const filter = { _id: new ObjectId(productId) };
+
+        // Only restrict to owner if the user is NOT an admin
+        if (role !== 'admin') {
+          filter["sellerInfo.userId"] = userId;
+        }
+
         const result = await productCollection.updateOne(
-          { _id: new ObjectId(productId), "sellerInfo.userId": sellerId },
+          filter,
           { $set: updateData }
         );
 
@@ -282,7 +386,6 @@ async function run() {
         res.status(500).json({ message: "Internal server error" });
       }
     });
-
 
     // All public products here
     app.get('/products', async (req, res) => {
