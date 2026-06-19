@@ -357,6 +357,38 @@ async function run() {
     //   }
     // });
 
+
+    // PATCH: Toggle product status between 'pending' and 'approved'
+    app.patch('/admin/products/toggle-status/:id', verifyToken, adminVerify, async (req, res) => {
+      try {
+        const productId = req.params.id;
+
+        // 1. Fetch current product status
+        const product = await productCollection.findOne({ _id: new ObjectId(productId) });
+
+        if (!product) {
+          return res.status(404).json({ message: "Product not found" });
+        }
+
+        // 2. Determine new status
+        const newStatus = product.status === 'approved' ? 'pending' : 'approved';
+
+        // 3. Apply the update
+        const result = await productCollection.updateOne(
+          { _id: new ObjectId(productId) },
+          { $set: { status: newStatus } }
+        );
+
+        res.json({
+          message: `Product status changed to ${newStatus}`,
+          status: newStatus
+        });
+      } catch (error) {
+        console.error("Error toggling product status:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
     app.patch('/seller/product/:id', verifyToken, sellerOrAdminVerify, async (req, res) => {
       try {
         const productId = req.params.id;
@@ -386,6 +418,10 @@ async function run() {
         res.status(500).json({ message: "Internal server error" });
       }
     });
+
+
+
+
 
     // All public products here
     app.get('/products', async (req, res) => {
